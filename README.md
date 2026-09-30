@@ -16,6 +16,7 @@ Customisable MIDI controller for use on Ableton Move with Schwung installed.
 - Change colour of banks, pads, knobs and buttons
 - Assign a name to banks, pads, knobs and buttons
 - Change knobs between relative or absolute values
+- Optional Knob Pages per bank: top pad row (25-32) becomes page selectors for 8 pages of knob mappings
 - Adjust pad mode per bank and per pad (Note/CC)
 - Adjust pad release behaviour per bank and per pad (Pad Offs, including Toggle)
 - Adjust button release behaviour per bank and per button (Button Offs, including Toggle)
@@ -136,6 +137,7 @@ Press a step button:
 | **Min Pad Level** | 0-127 | Velocity minimum for all pads |
 | **Pad Offs** | On/On Only/Toggle | Pad-off behaviour for all pads |
 | **Pad Mode** | Note/CC | Pads send MIDI notes or CC values |
+| **Knob Pages** | On/Off | Top pad row (25-32) selects between 8 knob pages |
 | **Button Offs** | On/On Only/Toggle | Button-off behaviour for all buttons |
 | **Output** | external/move/schwung | MIDI output destination |
 | **Show Overlay** | On/Off | Display info when pressing pads/knobs |
@@ -244,6 +246,18 @@ Output: 100 × 0.9 × 1.5 = 135 (max capped at 127, min at Bank's Min Pad Level)
 - Perfect for controlling plugins with existing values
 - Good for volume/filter controls
 
+### Knob Pages
+
+Enable **Knob Pages** in a bank's settings to turn the top pad row (pads 25-32) into knob page selectors:
+
+- **Pad 25** selects page 1 - the bank's existing knob mappings
+- **Pads 26-32** select pages 2-8 - 7 additional pages of 8 knob mappings each (56 extra mappings per bank)
+- The lit pad shows the active page; press another selector to switch
+- The master knob is shared across all pages
+- Each page's knobs have their own CC, name, colour, range, multiplier and relative/absolute settings - configure them in Settings just like normal knobs
+
+When Knob Pages is off (default), pads 25-32 behave as normal pads. Existing pad configurations are preserved when you toggle the feature, so you can switch it on and off without losing mappings.
+
 ### Colour Schemes
 
 **Pads & Buttons:** 0-127 individual colours
@@ -316,6 +330,7 @@ Your configuration is stored in:
 - Output: external
 - Show Overlay: On
 - H/light Colour: White
+- Knob Pages: Off
 
 ---
 

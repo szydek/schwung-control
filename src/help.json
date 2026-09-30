@@ -94,6 +94,7 @@
         "Min Pad Level: 0-127",
         "Pad Offs: On/Off/Tog",
         "Pad Mode: Note/CC",
+        "Knob Pages: On/Off",
         "Button Offs: On",
         " On-Only/Tog",
         "Output: ext/move/sch",
@@ -152,6 +153,25 @@
         "Perfect for hi-hats:",
         "Pad 1: Closed (Grp 1)",
         "Pad 2: Open (Grp 1)"
+      ]
+    },
+    {
+      "title": "Knob Pages",
+      "lines": [
+        "Bank setting.",
+        "When on, pads",
+        "25-32 select one",
+        "of 8 knob pages.",
+        "",
+        "Pad 25 = page 1",
+        "(existing knobs).",
+        "Pages 2-8 add",
+        "7x8 knob maps.",
+        "Master knob is",
+        "shared.",
+        "",
+        "Pad 25-32 config",
+        "is preserved."
       ]
     },
     {

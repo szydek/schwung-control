@@ -28,6 +28,8 @@ const SCREEN_HEIGHT = 64;
 const NUM_PADS = 32;
 const NUM_KNOBS = 9;
 const NUM_BANKS = 16;
+const NUM_KNOB_PAGES = 8;
+const KNOB_PAGE_PAD_START = NUM_PADS - NUM_KNOB_PAGES;  /* top row: pads 25-32 */
 
 /* MIDI CCs */
 const CC_JOG = MoveMainKnob;
@@ -96,7 +98,9 @@ const DEFAULTS = {
         BUTTON_OFFS: 'button-on-only',
         OVERLAY: 1,
         NAME: "(empty)",
-        HIGHLIGHTCOLOUR: 122
+        HIGHLIGHTCOLOUR: 122,
+        KNOBPAGES: 0,
+        KNOBPAGE: 0
     }
 };
 
@@ -212,8 +216,12 @@ function getBank(index) {
         set hlcolour(v) { config[index].hlcolour = v; },
         get bankled() { return config[index].bankled ?? White; },
         set bankled(v) { config[index].bankled = v; },
+        get knobpages() { return config[index].knobpages ?? DEFAULTS.BANK.KNOBPAGES; },
+        set knobpages(v) { config[index].knobpages = v; },
+        get knobpage() { return config[index].knobpage ?? DEFAULTS.BANK.KNOBPAGE; },
+        set knobpage(v) { config[index].knobpage = v; },
         pads: getPads(index),
-        knobs: getKnobs(index),
+        get knobs() { return getKnobs(index, activeKnobPage(index)); },
         buttons: getButtons(index)
     };
 
@@ -255,35 +263,58 @@ function getPads(bankIndex) {
     }));
 }
 
-function getKnobs(bankIndex) {
-    if (!config[bankIndex].knobs) config[bankIndex].knobs = {};
+/* Active knob page for a bank (0-7); always 0 when knob pages are disabled */
+function activeKnobPage(bankIndex) {
+    const c = config[bankIndex] ?? {};
+    if (!c.knobpages) return 0;
+    return clamp(c.knobpage ?? 0, 0, NUM_KNOB_PAGES - 1);
+}
+
+function getKnobs(bankIndex, pageIndex = 0) {
+    const isPaged = pageIndex > 0;
+
+    /* Page 1 (index 0) reuses the existing per-bank knob config so current
+     * configs stay valid. Pages 2-8 store under pageknobs[page]. */
+    let store;
+    if (isPaged) {
+        if (!config[bankIndex].pageknobs) config[bankIndex].pageknobs = {};
+        if (!config[bankIndex].pageknobs[pageIndex]) config[bankIndex].pageknobs[pageIndex] = {};
+        store = config[bankIndex].pageknobs[pageIndex];
+    } else {
+        if (!config[bankIndex].knobs) config[bankIndex].knobs = {};
+        store = config[bankIndex].knobs;
+    }
 
     /* Helper to ensure knob exists */
     const ensureKnob = (i) => {
-        if (!config[bankIndex].knobs[i]) config[bankIndex].knobs[i] = {};
-        return config[bankIndex].knobs[i];
+        if (!store[i]) store[i] = {};
+        return store[i];
     };
 
-    return new Array(NUM_KNOBS).fill(0).map((_, i) => ({
-        get value() { return config[bankIndex].knobs[i]?.value ?? DEFAULTS.KNOB.VALUE; },
+    /* Paged banks expose 8 knobs per page; the master knob is not paged */
+    const count = isPaged ? NUM_KNOBS - 1 : NUM_KNOBS;
+    const knobs = new Array(count).fill(0).map((_, i) => ({
+        get value() { return store[i]?.value ?? DEFAULTS.KNOB.VALUE; },
         set value(v) { ensureKnob(i).value = v; },
-        get cc() { return config[bankIndex].knobs[i]?.cc ?? (i + DEFAULTS.KNOB.CC_OFFSET); },
+        get cc() { return store[i]?.cc ?? (i + DEFAULTS.KNOB.CC_OFFSET); },
         set cc(v) { ensureKnob(i).cc = v; },
-        get name() { return config[bankIndex].knobs[i]?.name ?? DEFAULTS.KNOB.NAME; },
+        get name() { return store[i]?.name ?? DEFAULTS.KNOB.NAME; },
         set name(v) { ensureKnob(i).name = v; },
-        get colour() { return config[bankIndex].knobs[i]?.colour ?? DEFAULTS.KNOB.COLOUR; },
+        get colour() { return store[i]?.colour ?? DEFAULTS.KNOB.COLOUR; },
         set colour(v) { ensureKnob(i).colour = v; },
-        get min() { return config[bankIndex].knobs[i]?.min ?? DEFAULTS.KNOB.MIN; },
+        get min() { return store[i]?.min ?? DEFAULTS.KNOB.MIN; },
         set min(v) { ensureKnob(i).min = v; },
-        get max() { return config[bankIndex].knobs[i]?.max ?? DEFAULTS.KNOB.MAX; },
+        get max() { return store[i]?.max ?? DEFAULTS.KNOB.MAX; },
         set max(v) { ensureKnob(i).max = v; },
-        get relative() { return config[bankIndex].knobs[i]?.relative ?? DEFAULTS.KNOB.RELATIVE; },
+        get relative() { return store[i]?.relative ?? DEFAULTS.KNOB.RELATIVE; },
         set relative(v) { ensureKnob(i).relative = v; },
-        get multiplier() { return config[bankIndex].knobs[i]?.multiplier ?? DEFAULTS.KNOB.MULTIPLIER; },
+        get multiplier() { return store[i]?.multiplier ?? DEFAULTS.KNOB.MULTIPLIER; },
         set multiplier(v) { ensureKnob(i).multiplier = v; },
-        get channel() { return config[bankIndex].knobs[i]?.channel ?? null; },
+        get channel() { return store[i]?.channel ?? null; },
         set channel(v) { ensureKnob(i).channel = v; }
     }));
+    if (isPaged) knobs.push(getKnobs(bankIndex, 0)[NUM_KNOBS - 1]);
+    return knobs;
 }
 
 function getButtons(bankIndex) {
@@ -532,7 +563,14 @@ function updateLEDs() {
     const pads = banks[selectedBank].pads;
     const bankPadOffMode = banks[selectedBank].padoffs ?? 'pad-on-off';
     const bankHl = banks[selectedBank].hlcolour;
+    const knobPagesOn = !!banks[selectedBank].knobpages;
+    const knobPage = activeKnobPage(selectedBank);
     for (let i = 0; i < NUM_PADS; i++) {
+        if (knobPagesOn && i >= KNOB_PAGE_PAD_START) {
+            /* Top row becomes lit knob page selectors */
+            enqueueNoteLED(i + 68, (i - KNOB_PAGE_PAD_START) === knobPage ? White : DarkGrey);
+            continue;
+        }
         const pad = pads[i];
         const padOffMode = pad.padoffs ?? bankPadOffMode;
         let colour = pad.colour ?? Black;
@@ -870,6 +908,10 @@ function getSettingsItems() {
                 options: ['note', 'cc'],
                 format: (v) => v === 'cc' ? 'CC' : 'Note'
             }),
+            createToggle('Knob Pages', {
+                get: () => banks[selectedBank].knobpages ?? 0,
+                set: (v) => { banks[selectedBank].knobpages = v ? 1 : 0; }
+            }),
             createEnum('Button Offs', {
                 get: () => banks[selectedBank].buttonoffs ?? 'button-on-only',
                 set: (v) => { banks[selectedBank].buttonoffs = v; },
@@ -917,7 +959,13 @@ function initSettingsMenu() {
 
 function getSelectedLabel() {
     if (selected === 0) return `Pad ${selectedPad + 1}`;
-    if (selected === 1) return `Knob ${selectedKnob + 1}`;
+    if (selected === 1) {
+        /* Show the knob page when paging is active (master knob is not paged) */
+        if (banks[selectedBank].knobpages && selectedKnob < NUM_KNOBS - 1) {
+            return `Knob ${selectedKnob + 1} P${activeKnobPage(selectedBank) + 1}`;
+        }
+        return `Knob ${selectedKnob + 1}`;
+    }
     if (selected === 2) return `Button ${selectedButton + 1}`;
     return `Bank ${selectedBank + 1}`;
 }
@@ -1180,9 +1228,10 @@ function handleCC(cc, val) {
             if (viewMode === VIEW_MAIN) {
                 let knobs = banks[selectedBank].knobs;
                 let colour = getColourForKnobValue(knobs[i].colour, midiValue, knobs[i].min, knobs[i].max);
-                if (cachedKnobColour[selectedKnob] != colour) {
+                const cacheKey = `${selectedBank}:${activeKnobPage(selectedBank)}:${selectedKnob}`;
+                if (cachedKnobColour[cacheKey] != colour) {
                     enqueueCcLED(i+71, colour);
-                    cachedKnobColour[selectedKnob] = colour;
+                    cachedKnobColour[cacheKey] = colour;
                 }
                 if (banks[selectedBank].overlay) {
                     if (showKnobOverlay(selectedKnob, midiValue)) needsRedraw = true;
@@ -1290,8 +1339,8 @@ function handleCC(cc, val) {
             restoreToggleStateForBank(selectedBank);
         }
 
-        /* Full LED refresh when Pad Offs, H/light Colour or Button Offs changes */
-        if (itemChanged && (item.label === 'Pad Offs' || item.label === 'H/light Colour' || item.label === 'Button Offs')) {
+        /* Full LED refresh when Pad Offs, H/light Colour, Button Offs or Knob Pages changes */
+        if (itemChanged && (item.label === 'Pad Offs' || item.label === 'H/light Colour' || item.label === 'Button Offs' || item.label === 'Knob Pages')) {
             updateLEDs();
         }
 
@@ -1312,6 +1361,16 @@ function handleCC(cc, val) {
                 if (item.label === 'MIDI Channel' && bankConfig.knobs) {
                     for (let i = 0; i < NUM_KNOBS; i++) {
                         if (bankConfig.knobs[i]) delete bankConfig.knobs[i].channel;
+                    }
+                }
+                if (item.label === 'MIDI Channel' && bankConfig.pageknobs) {
+                    for (let p = 1; p < NUM_KNOB_PAGES; p++) {
+                        const pageKnobs = bankConfig.pageknobs[p];
+                        if (pageKnobs) {
+                            for (let i = 0; i < NUM_KNOBS - 1; i++) {
+                                if (pageKnobs[i]) delete pageKnobs[i].channel;
+                            }
+                        }
                     }
                 }
                 if ((item.label === 'MIDI Channel' || item.label === 'Button Offs') && bankConfig.buttons) {
@@ -1368,6 +1427,17 @@ function handleNote(note, vel) {
     /* Pads press */
     if (note >= 68 && note <= 99 && vel > 0) {
         const padIdx = note - 68;
+        /* Knob pages: top row pads act as page selectors instead of sending MIDI */
+        if (banks[selectedBank].knobpages && padIdx >= KNOB_PAGE_PAD_START) {
+            if (viewMode === VIEW_SETTINGS) settingsMenuState.editing = false;
+            banks[selectedBank].knobpage = padIdx - KNOB_PAGE_PAD_START;
+            updateLEDs();
+            if (viewMode === VIEW_MAIN && banks[selectedBank].overlay) {
+                showOverlay('Knob Page', `${padIdx - KNOB_PAGE_PAD_START + 1}`, OVERLAY_DURATION);
+            }
+            needsRedraw = true;
+            return;
+        }
         if (viewMode === VIEW_SETTINGS && selectedPad != padIdx) {
             settingsMenuState.editing = false;
             transferPulse(0, padIdx);
@@ -1465,6 +1535,8 @@ function handleNote(note, vel) {
     /* Pads release */
     if (note >= 68 && note <= 99 && vel === 0) {
         const padIdx = note - 68;
+        /* Knob page selectors send nothing, so their release is ignored */
+        if (banks[selectedBank].knobpages && padIdx >= KNOB_PAGE_PAD_START) return;
         const releasePad = banks[selectedBank].pads[padIdx];
 
         /* send midi */
