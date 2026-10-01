@@ -869,7 +869,7 @@ function getSettingsItems() {
         }
         return padItems;
     } else if (selected === 1) {  // knob config
-        return [
+        const knobItems = [
             createValue('CC', {
                 get: () => banks[selectedBank].knobs[selectedKnob].cc ?? 0,
                 set: (v) => { banks[selectedBank].knobs[selectedKnob].cc = v; },
@@ -925,6 +925,15 @@ function getSettingsItems() {
                 }
             })
         ];
+        /* Optional name for the knob page (master knob is not paged) */
+        if (banks[selectedBank].knobpages && selectedKnob < NUM_KNOBS - 1) {
+            const page = activeKnobPage(selectedBank);
+            knobItems.push(createValue('Page Name', {
+                get: () => config[selectedBank]?.knobpagenames?.[page] || "(empty)",
+                set: (v) => { needsRedraw = true; }
+            }));
+        }
+        return knobItems;
     } else if (selected === 2) {  // button config
         const buttonItems = [
             createValue('CC', {
@@ -1542,6 +1551,23 @@ function handleCC(cc, val) {
             needsRedraw = true;
             return;
         }
+        if (item && item.label === 'Page Name' && cc === CC_JOG_CLICK && val > 63) {
+            const page = activeKnobPage(selectedBank);
+            let lastText = config[selectedBank]?.knobpagenames?.[page] ?? "";
+            if (lastText === "(empty)") lastText = "";
+            openTextEntry({
+                title: "Enter Page Name",
+                initialText: lastText,
+                onConfirm: (text) => {
+                    if (!config[selectedBank].knobpagenames) config[selectedBank].knobpagenames = {};
+                    config[selectedBank].knobpagenames[page] = text || "(empty)";
+                }
+            });
+            settingsMenuState.editing = false;
+            settingsMenuState.editValue = null;
+            needsRedraw = true;
+            return;
+        }
 
         /* Detect whether an enum/value/toggle item was just changed (not merely hovered).
          * handleMenuInput sets needsRedraw when a value is committed and clears editValue.
@@ -1656,10 +1682,15 @@ function handleNote(note, vel) {
         /* Knob pages: top row pads act as page selectors instead of sending MIDI */
         if (banks[selectedBank].knobpages && padIdx >= KNOB_PAGE_PAD_START) {
             if (viewMode === VIEW_SETTINGS) settingsMenuState.editing = false;
-            banks[selectedBank].knobpage = padIdx - KNOB_PAGE_PAD_START;
+            const page = padIdx - KNOB_PAGE_PAD_START;
+            banks[selectedBank].knobpage = page;
             updateLEDs();
             if (viewMode === VIEW_MAIN && banks[selectedBank].overlay) {
-                showOverlay('Knob Page', `${padIdx - KNOB_PAGE_PAD_START + 1}`, OVERLAY_DURATION);
+                const bankName = banks[selectedBank].name;
+                const bankLabel = bankName !== DEFAULTS.BANK.NAME ? bankName : `Bank ${selectedBank + 1}`;
+                const pageName = config[selectedBank]?.knobpagenames?.[page];
+                const pageLabel = pageName && pageName !== '(empty)' ? pageName : `Page ${page + 1}`;
+                showOverlay(bankLabel, pageLabel, OVERLAY_DURATION);
             }
             needsRedraw = true;
             return;

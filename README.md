@@ -259,7 +259,8 @@ Enable **Knob Pages** in a bank's settings to turn the top pad row (pads 25-32) 
 
 - **Pad 25** selects page 1 - the bank's existing knob mappings
 - **Pads 26-32** select pages 2-8 - 7 additional pages of 8 knob mappings each (56 extra mappings per bank)
-- The lit pad shows the active page; press another selector to switch
+- The lit pad shows the active page; the overlay shows the bank name and page number (or page name)
+- Each page can be named: in a knob's settings on that page, use **Page Name**
 - The master knob is shared across all pages
 - Each page's knobs have their own CC, name, colour, range, multiplier and relative/absolute settings - configure them in Settings just like normal knobs
 
