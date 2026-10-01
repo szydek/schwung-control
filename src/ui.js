@@ -179,7 +179,7 @@ const ledQueue = [];
 
 /* Debug: log every external MIDI message to the console while the MIDI In
  * feature is being verified on device. Set false once confirmed working. */
-const DEBUG_MIDI_IN = true;
+const DEBUG_MIDI_IN = false;
 let midiInReceived = 0;
 let midiInMatched = 0;
 
