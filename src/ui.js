@@ -30,6 +30,7 @@ const NUM_KNOBS = 9;
 const NUM_BANKS = 16;
 const NUM_KNOB_PAGES = 8;
 const KNOB_PAGE_PAD_START = NUM_PADS - NUM_KNOB_PAGES;  /* top row: pads 25-32 */
+const NUM_PAD_PAGES = 2;
 
 /* MIDI CCs */
 const CC_JOG = MoveMainKnob;
@@ -101,6 +102,8 @@ const DEFAULTS = {
         HIGHLIGHTCOLOUR: 122,
         KNOBPAGES: 0,
         KNOBPAGE: 0,
+        PADPAGES: 'off',
+        PADPAGE: 0,
         MIDIIN: 0
     }
 };
@@ -229,7 +232,11 @@ function getBank(index) {
         set knobpage(v) { config[index].knobpage = v; },
         get midiin() { return config[index].midiin ?? DEFAULTS.BANK.MIDIIN; },
         set midiin(v) { config[index].midiin = v; },
-        pads: getPads(index),
+        get padpages() { return config[index].padpages ?? DEFAULTS.BANK.PADPAGES; },
+        set padpages(v) { config[index].padpages = v; },
+        get padpage() { return config[index].padpage ?? DEFAULTS.BANK.PADPAGE; },
+        set padpage(v) { config[index].padpage = v; },
+        get pads() { return getPads(index, activePadPage(index)); },
         get knobs() { return getKnobs(index, activeKnobPage(index)); },
         buttons: getButtons(index)
     };
@@ -237,39 +244,84 @@ function getBank(index) {
     return bank;
 }
 
-function getPads(bankIndex) {
-    if (!config[bankIndex].pads) config[bankIndex].pads = {};
+function getPads(bankIndex, pageIndex = 0) {
+    const isPaged = pageIndex > 0;
+
+    /* Page 1 (index 0) reuses the existing per-bank pad config. Page 2
+     * stores under pagepads[1] with defaults offset by one grid
+     * (CC 33-64, notes 68-99) for Push-style 8-per-column layouts. */
+    let store;
+    if (isPaged) {
+        if (!config[bankIndex].pagepads) config[bankIndex].pagepads = {};
+        if (!config[bankIndex].pagepads[pageIndex]) config[bankIndex].pagepads[pageIndex] = {};
+        store = config[bankIndex].pagepads[pageIndex];
+    } else {
+        if (!config[bankIndex].pads) config[bankIndex].pads = {};
+        store = config[bankIndex].pads;
+    }
 
     /* Helper to ensure pad exists */
     const ensurePad = (i) => {
-        if (!config[bankIndex].pads[i]) config[bankIndex].pads[i] = {};
-        return config[bankIndex].pads[i];
+        if (!store[i]) store[i] = {};
+        return store[i];
     };
 
     return new Array(NUM_PADS).fill(0).map((_, i) => ({
-        get note() { return config[bankIndex].pads[i]?.note ?? (i + DEFAULTS.PAD.NOTE_OFFSET); },
+        get note() { return store[i]?.note ?? (i + DEFAULTS.PAD.NOTE_OFFSET + pageIndex * NUM_PADS); },
         set note(v) { ensurePad(i).note = v; },
-        get cc() { return config[bankIndex].pads[i]?.cc ?? (i + DEFAULTS.PAD.CC_OFFSET); },
+        get cc() { return store[i]?.cc ?? (i + DEFAULTS.PAD.CC_OFFSET + pageIndex * NUM_PADS); },
         set cc(v) { ensurePad(i).cc = v; },
-        get name() { return config[bankIndex].pads[i]?.name ?? DEFAULTS.PAD.NAME; },
+        get name() { return store[i]?.name ?? DEFAULTS.PAD.NAME; },
         set name(v) { ensurePad(i).name = v; },
-        get colour() { return config[bankIndex].pads[i]?.colour ?? DEFAULTS.PAD.COLOUR; },
+        get colour() { return store[i]?.colour ?? DEFAULTS.PAD.COLOUR; },
         set colour(v) { ensurePad(i).colour = v; },
-        get level() { return config[bankIndex].pads[i]?.level ?? DEFAULTS.PAD.LEVEL; },
+        get level() { return store[i]?.level ?? DEFAULTS.PAD.LEVEL; },
         set level(v) { ensurePad(i).level = v; },
-        get chokegrp() { return config[bankIndex].pads[i]?.chokegrp ?? DEFAULTS.PAD.CHOKEGRP; },
+        get chokegrp() { return store[i]?.chokegrp ?? DEFAULTS.PAD.CHOKEGRP; },
         set chokegrp(v) { ensurePad(i).chokegrp = v; },
-        get padoffs() { return config[bankIndex].pads[i]?.padoffs ?? null; },
+        get padoffs() { return store[i]?.padoffs ?? null; },
         set padoffs(v) { ensurePad(i).padoffs = v; },
-        get padmode() { return config[bankIndex].pads[i]?.padmode ?? null; },
+        get padmode() { return store[i]?.padmode ?? null; },
         set padmode(v) { ensurePad(i).padmode = v; },
-        get channel() { return config[bankIndex].pads[i]?.channel ?? null; },
+        get channel() { return store[i]?.channel ?? null; },
         set channel(v) { ensurePad(i).channel = v; },
-        get output() { return config[bankIndex].pads[i]?.output ?? null; },
+        get output() { return store[i]?.output ?? null; },
         set output(v) { ensurePad(i).output = v; },
-        get value() { return config[bankIndex].pads[i]?.value ?? 0; },
+        get value() { return store[i]?.value ?? 0; },
         set value(v) { ensurePad(i).value = v; }
     }));
+}
+
+/* Pad paging is active when a pad-pages mode is set and knob pages
+ * (which owns the top pad row) is off - the two are mutually exclusive */
+function padPagesActive(bankIndex) {
+    const c = config[bankIndex] ?? {};
+    return !!(c.padpages && c.padpages !== 'off' && !c.knobpages);
+}
+
+/* Active pad page for a bank (0-1); always 0 when pad paging is disabled */
+function activePadPage(bankIndex) {
+    if (!padPagesActive(bankIndex)) return 0;
+    return clamp((config[bankIndex] ?? {}).padpage ?? 0, 0, NUM_PAD_PAGES - 1);
+}
+
+/* Toggle state is tracked per bank+page+pad */
+function padToggleKey(bankIndex, padIdx, pageIndex = activePadPage(bankIndex)) {
+    return `${bankIndex}:${pageIndex}:${padIdx}`;
+}
+
+/* Send pending note/CC offs for pads still held across a page flip or bank
+ * switch, and swallow their releases so a held pad can't send a stale off
+ * against the new page/bank's mapping. */
+const heldPadOffs = new Map();      /* padIdx -> off message or null */
+const swallowedPadReleases = new Set();
+
+function flushHeldPads() {
+    for (const [padIdx, off] of heldPadOffs) {
+        if (off) sendMidi(off.output, off.status, off.channel, off.d1, 0);
+        heldPadOffs.delete(padIdx);
+        swallowedPadReleases.add(padIdx);
+    }
 }
 
 /* Active knob page for a bank (0-7); always 0 when knob pages are disabled */
@@ -365,14 +417,18 @@ function restoreToggleStateForBank(bankIndex) {
     if (!bank) return;
     const bankPadOffMode = bank.padoffs ?? DEFAULTS.BANK.PAD_OFFS;
     const bankButtonOffs = bank.buttonoffs ?? DEFAULTS.BANK.BUTTON_OFFS;
-    for (let i = 0; i < NUM_PADS; i++) {
-        const pad = bank.pads[i];
-        const padOffMode = pad.padoffs ?? bankPadOffMode;
-        const key = `${bankIndex}:${i}`;
-        if (padOffMode === 'toggle' && pad.value === 127) {
-            toggledNotes.add(key);
-        } else {
-            toggledNotes.delete(key);
+    const padPages = padPagesActive(bankIndex) ? NUM_PAD_PAGES : 1;
+    for (let p = 0; p < padPages; p++) {
+        const pads = getPads(bankIndex, p);
+        for (let i = 0; i < NUM_PADS; i++) {
+            const pad = pads[i];
+            const padOffMode = pad.padoffs ?? bankPadOffMode;
+            const key = padToggleKey(bankIndex, i, p);
+            if (padOffMode === 'toggle' && pad.value === 127) {
+                toggledNotes.add(key);
+            } else {
+                toggledNotes.delete(key);
+            }
         }
     }
     for (let i = 0; i < ALL_BUTTONS.length; i++) {
@@ -584,7 +640,7 @@ function updateLEDs() {
         const padOffMode = pad.padoffs ?? bankPadOffMode;
         let colour = pad.colour ?? Black;
         if (padOffMode === 'toggle') {
-            const toggleKey = `${selectedBank}:${i}`;
+            const toggleKey = padToggleKey(selectedBank, i);
             if (toggledNotes.has(toggleKey)) {
                 /* Toggled on: show pad colour */
                 colour = pad.colour ?? Black;
@@ -616,6 +672,13 @@ function updateLEDs() {
             colour = toggledButtons.has(toggleKey) ? getButtonRestingColour(button, i) : Black;
         }
         enqueueCcLED(ALL_BUTTONS[i], colour);
+    }
+
+    /* Pad page indicator: when Up is the page control it shows page state
+     * (bright = page 2, dim = page 1) instead of its button colour */
+    const padPageMode = banks[selectedBank].padpages;
+    if (padPagesActive(selectedBank) && (padPageMode === 'up-toggle' || padPageMode === 'up-hold')) {
+        enqueueCcLED(MoveUp, activePadPage(selectedBank) ? WhiteLedBright : WhiteLedDim);
     }
 
     /* Bank LEDs. In settings view, leave the selected bank pulsing and don't
@@ -919,7 +982,24 @@ function getSettingsItems() {
             }),
             createToggle('Knob Pages', {
                 get: () => banks[selectedBank].knobpages ?? 0,
-                set: (v) => { banks[selectedBank].knobpages = v ? 1 : 0; }
+                set: (v) => {
+                    banks[selectedBank].knobpages = v ? 1 : 0;
+                    if (v) banks[selectedBank].padpages = 'off';  /* mutually exclusive */
+                }
+            }),
+            createEnum('Pad Pages', {
+                get: () => banks[selectedBank].padpages ?? 'off',
+                set: (v) => {
+                    banks[selectedBank].padpages = v;
+                    if (v !== 'off') banks[selectedBank].knobpages = 0;  /* mutually exclusive */
+                },
+                options: ['off', 'up-toggle', 'up-hold', 'jog-toggle'],
+                format: (v) => ({
+                    'off': 'Off',
+                    'up-toggle': 'Up Toggle',
+                    'up-hold': 'Up Hold',
+                    'jog-toggle': 'Jog Toggle'
+                })[v] ?? v
             }),
             createToggle('MIDI In', {
                 get: () => banks[selectedBank].midiin ?? 0,
@@ -971,7 +1051,10 @@ function initSettingsMenu() {
 }
 
 function getSelectedLabel() {
-    if (selected === 0) return `Pad ${selectedPad + 1}`;
+    if (selected === 0) {
+        if (padPagesActive(selectedBank)) return `Pad ${selectedPad + 1} P${activePadPage(selectedBank) + 1}`;
+        return `Pad ${selectedPad + 1}`;
+    }
     if (selected === 1) {
         /* Show the knob page when paging is active (master knob is not paged) */
         if (banks[selectedBank].knobpages && selectedKnob < NUM_KNOBS - 1) {
@@ -1117,6 +1200,34 @@ function handleCC(cc, val) {
             selectedKnob = -1;
             selectedPad = -1;
             transferPulse(3, selectedBank);
+        }
+        needsRedraw = true;
+        return;
+    }
+
+    /* Pad page controls: Up button or jog click, per the bank's Pad Pages mode */
+    const padPageMode = banks[selectedBank].padpages;
+    if (padPagesActive(selectedBank) && cc === MoveUp &&
+        (padPageMode === 'up-toggle' || padPageMode === 'up-hold')) {
+        if (padPageMode === 'up-toggle' && val === 0) return;  /* ignore release */
+        if (viewMode === VIEW_SETTINGS) settingsMenuState.editing = false;
+        flushHeldPads();
+        banks[selectedBank].padpage = padPageMode === 'up-hold' ? (val > 63 ? 1 : 0)
+                                      : (activePadPage(selectedBank) ? 0 : 1);
+        updateLEDs();
+        if (viewMode === VIEW_MAIN && banks[selectedBank].overlay && val > 63) {
+            showOverlay('Pad Page', `${activePadPage(selectedBank) + 1}`, OVERLAY_DURATION);
+        }
+        needsRedraw = true;
+        return;
+    }
+    if (cc === CC_JOG_CLICK && padPageMode === 'jog-toggle' && padPagesActive(selectedBank) &&
+        viewMode === VIEW_MAIN && val > 63) {
+        flushHeldPads();
+        banks[selectedBank].padpage = activePadPage(selectedBank) ? 0 : 1;
+        updateLEDs();
+        if (banks[selectedBank].overlay) {
+            showOverlay('Pad Page', `${activePadPage(selectedBank) + 1}`, OVERLAY_DURATION);
         }
         needsRedraw = true;
         return;
@@ -1352,8 +1463,8 @@ function handleCC(cc, val) {
             restoreToggleStateForBank(selectedBank);
         }
 
-        /* Full LED refresh when Pad Offs, H/light Colour, Button Offs or Knob Pages changes */
-        if (itemChanged && (item.label === 'Pad Offs' || item.label === 'H/light Colour' || item.label === 'Button Offs' || item.label === 'Knob Pages')) {
+        /* Full LED refresh when Pad Offs, H/light Colour, Button Offs, Knob Pages or Pad Pages changes */
+        if (itemChanged && (item.label === 'Pad Offs' || item.label === 'H/light Colour' || item.label === 'Button Offs' || item.label === 'Knob Pages' || item.label === 'Pad Pages')) {
             updateLEDs();
         }
 
@@ -1427,6 +1538,7 @@ function handleNote(note, vel) {
             settingsMenuState.editing = false;
             transferPulse(3, bankIdx);
         }
+        flushHeldPads();  /* settle offs for pads held across the switch */
         selectedBank = bankIdx;
         selectedKnob = -1;
         selectedPad = -1;
@@ -1468,6 +1580,15 @@ function handleNote(note, vel) {
         const highlightColour = resolveHighlightColour(banks[selectedBank].hlcolour, pad.colour);
         const padOffMode = getPadOffs(pad);
 
+        /* Record the off this press will owe on release, so a page/bank flip
+         * while held can settle it correctly (see flushHeldPads) */
+        swallowedPadReleases.delete(padIdx);
+        heldPadOffs.set(padIdx,
+            padOffMode === 'toggle' ? null
+            : padMode === 'cc' ? { output: padOutput, status: 0xB0, channel, d1: ccOut }
+            : padOffMode === 'pad-on-off' ? { output: padOutput, status: 0x80, channel, d1: noteOut }
+            : null);
+
         /* edit velocity */
         let padLevel = pad.level ?? 100;
         let masterPadLevel = banks[selectedBank].level ?? 100;
@@ -1477,7 +1598,7 @@ function handleNote(note, vel) {
         if (velOut < minPadLevel) velOut = minPadLevel;
 
         /* toggle mode: flip active state on each press */
-        const toggleKey = `${selectedBank}:${padIdx}`;
+        const toggleKey = padToggleKey(selectedBank, padIdx);
         const isToggleOff = padOffMode === 'toggle' && toggledNotes.has(toggleKey);
         if (isToggleOff) {
             toggledNotes.delete(toggleKey);
@@ -1550,6 +1671,14 @@ function handleNote(note, vel) {
         const padIdx = note - 68;
         /* Knob page selectors send nothing, so their release is ignored */
         if (banks[selectedBank].knobpages && padIdx >= KNOB_PAGE_PAD_START) return;
+
+        /* A page/bank flip while held already sent this pad's off - swallow */
+        if (swallowedPadReleases.delete(padIdx)) {
+            enqueueNoteLED(note, banks[selectedBank].pads[padIdx].colour);
+            needsRedraw = true;
+            return;
+        }
+
         const releasePad = banks[selectedBank].pads[padIdx];
 
         /* send midi */
@@ -1558,8 +1687,16 @@ function handleNote(note, vel) {
         const padOutput = getPadOutput(releasePad);
         const releaseChannel = getChannel(releasePad);
         let releaseNoteOut = releasePad.note;
-        const releaseToggleKey = `${selectedBank}:${padIdx}`;
-        if (releasePadMode === 'note' && releasePadOffMode === 'pad-on-off') {
+        const releaseToggleKey = padToggleKey(selectedBank, padIdx);
+        if (heldPadOffs.has(padIdx)) {
+            /* Use the off recorded at press so config can't have drifted */
+            const off = heldPadOffs.get(padIdx);
+            heldPadOffs.delete(padIdx);
+            if (off) {
+                sendMidi(off.output, off.status, off.channel, off.d1, 0);
+                if (off.status === 0xB0 && viewMode === VIEW_MAIN && banks[selectedBank].overlay) showPadOverlay(padIdx, 0);
+            }
+        } else if (releasePadMode === 'note' && releasePadOffMode === 'pad-on-off') {
             sendMidi(padOutput, 0x80, releaseChannel, releaseNoteOut, vel);
         } else if (releasePadMode === 'cc' && releasePadOffMode !== 'toggle') {
             sendMidi(padOutput, 0xB0, releaseChannel, releasePad.cc, 0);
@@ -1673,27 +1810,33 @@ function handleExternalCC(channel, ccNum, value) {
             }
         }
 
-        /* CC-mode pads (top row excluded when it serves as page selectors) */
+        /* CC-mode pads - every configured pad page, so state stays synced when
+         * switching (top row excluded when it serves as knob page selectors) */
         const bankPadMode = bank.padmode ?? DEFAULTS.BANK.PAD_MODE;
         const bankPadOffMode = bank.padoffs ?? DEFAULTS.BANK.PAD_OFFS;
         const padLimit = bank.knobpages ? KNOB_PAGE_PAD_START : NUM_PADS;
-        for (let i = 0; i < padLimit; i++) {
-            const pad = bank.pads[i];
-            const padMode = pad.padmode ?? bankPadMode;
-            if (padMode !== 'cc' || pad.cc !== ccNum) continue;
-            const ch = (pad.channel ?? bank.channel ?? DEFAULTS.BANK.CHANNEL) - 1;
-            if (ch !== channel) continue;
-            matched = true;
-            const padOffMode = pad.padoffs ?? bankPadOffMode;
-            if (padOffMode === 'toggle') {
-                const key = `${b}:${i}`;
-                if (value > 63) { toggledNotes.add(key); pad.value = 127; }
-                else { toggledNotes.delete(key); pad.value = 0; }
-                if (b === selectedBank) {
-                    enqueueNoteLED(i + 68, value > 63 ? pad.colour : resolveHighlightColour(bank.hlcolour, pad.colour));
+        const padPages = padPagesActive(b) ? NUM_PAD_PAGES : 1;
+        for (let p = 0; p < padPages; p++) {
+            if (p > 0 && !config[b]?.pagepads?.[p]) continue;
+            const pads = getPads(b, p);
+            for (let i = 0; i < padLimit; i++) {
+                const pad = pads[i];
+                const padMode = pad.padmode ?? bankPadMode;
+                if (padMode !== 'cc' || pad.cc !== ccNum) continue;
+                const ch = (pad.channel ?? bank.channel ?? DEFAULTS.BANK.CHANNEL) - 1;
+                if (ch !== channel) continue;
+                matched = true;
+                const padOffMode = pad.padoffs ?? bankPadOffMode;
+                if (padOffMode === 'toggle') {
+                    const key = padToggleKey(b, i, p);
+                    if (value > 63) { toggledNotes.add(key); pad.value = 127; }
+                    else { toggledNotes.delete(key); pad.value = 0; }
+                    if (b === selectedBank && p === activePadPage(b)) {
+                        enqueueNoteLED(i + 68, value > 63 ? pad.colour : resolveHighlightColour(bank.hlcolour, pad.colour));
+                    }
+                } else {
+                    pad.value = value;
                 }
-            } else {
-                pad.value = value;
             }
         }
     }

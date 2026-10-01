@@ -95,6 +95,8 @@
         "Pad Offs: On/Off/Tog",
         "Pad Mode: Note/CC",
         "Knob Pages: On/Off",
+        "Pad Pages: Off/Up/",
+        " Up-Hold/Jog",
         "MIDI In: On/Off",
         "Button Offs: On",
         " On-Only/Tog",
@@ -173,6 +175,24 @@
         "",
         "Pad 25-32 config",
         "is preserved."
+      ]
+    },
+    {
+      "title": "Pad Pages",
+      "lines": [
+        "Bank setting.",
+        "Second page of 32",
+        "pads (64 total).",
+        "",
+        "Controls:",
+        "Up Toggle: press +",
+        "Up Hold: hold +",
+        "Jog Toggle: click",
+        "jog wheel",
+        "",
+        "Exclusive with",
+        "Knob Pages. State",
+        "kept per page."
       ]
     },
     {

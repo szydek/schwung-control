@@ -17,6 +17,7 @@ Customisable MIDI controller for use on Ableton Move with Schwung installed.
 - Assign a name to banks, pads, knobs and buttons
 - Change knobs between relative or absolute values
 - Optional Knob Pages per bank: top pad row (25-32) becomes page selectors for 8 pages of knob mappings
+- Optional Pad Pages per bank: a second page of 32 pads (64 total, Push-style) switched via Up button or jog click
 - Optional MIDI In per bank: incoming external CCs update knob/button/pad state so LEDs and values stay in sync
 - Adjust pad mode per bank and per pad (Note/CC)
 - Adjust pad release behaviour per bank and per pad (Pad Offs, including Toggle)
@@ -139,6 +140,7 @@ Press a step button:
 | **Pad Offs** | On/On Only/Toggle | Pad-off behaviour for all pads |
 | **Pad Mode** | Note/CC | Pads send MIDI notes or CC values |
 | **Knob Pages** | On/Off | Top pad row (25-32) selects between 8 knob pages |
+| **Pad Pages** | Off / Up Toggle / Up Hold / Jog Toggle | Second page of 32 pads; page control style (mutually exclusive with Knob Pages) |
 | **MIDI In** | On/Off | Incoming external CCs update this bank's control state |
 | **Button Offs** | On/On Only/Toggle | Button-off behaviour for all buttons |
 | **Output** | external/move/schwung | MIDI output destination |
@@ -260,6 +262,24 @@ Enable **Knob Pages** in a bank's settings to turn the top pad row (pads 25-32) 
 
 When Knob Pages is off (default), pads 25-32 behave as normal pads. Existing pad configurations are preserved when you toggle the feature, so you can switch it on and off without losing mappings.
 
+### Pad Pages
+
+Enable **Pad Pages** in a bank's settings to double the pad grid to 64 pads (Push-style 8 per column):
+
+- **Page 1** is the bank's existing pads; **page 2** is a full second set with their own note/CC, name, colour, level, choke group, pad-offs and pad-mode settings - defaults are offset by one grid (CC 33-64, notes 68-99)
+- Toggle state and MIDI In sync are tracked per page - switch back and everything is where you left it
+- Pads held across a page flip still send their note-off/CC-off correctly
+
+**Page controls** (choose per bank):
+
+| Mode | Behaviour |
+|------|-----------|
+| **Up Toggle** | Press the +/Up pad button to flip pages; its LED shows the page (bright = page 2, dim = page 1) |
+| **Up Hold** | Hold +/Up for page 2, release to return to page 1 |
+| **Jog Toggle** | Click the main jog wheel to flip pages (main view only) |
+
+When a page control uses the Up button, that button's own mapping is unavailable for the bank. **Pad Pages and Knob Pages are mutually exclusive** - enabling one turns the other off, since Knob Pages owns the top pad row.
+
 ### MIDI In (External Sync)
 
 Enable **MIDI In** in a bank's settings so incoming external CC messages update the module's internal state:
@@ -343,6 +363,7 @@ Your configuration is stored in:
 - Show Overlay: On
 - H/light Colour: White
 - Knob Pages: Off
+- Pad Pages: Off
 - MIDI In: Off
 
 ---
