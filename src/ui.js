@@ -328,21 +328,27 @@ function kbLayoutActive(bankIndex) {
               (!c.padpages || c.padpages === 'off'));
 }
 
-/* Keyboard layouts:
- *   chromatic: pad i -> root + oct*12 + i          (8 semitones per row)
- *   rows4:     pad i -> root + oct*12 + row*4 + col (Push-style, rows overlap) */
+/* Keyboard layouts: semitone interval between rows of 8 pads.
+ * New layouts are added here - chromatic is simply rows of +8. */
+const KB_ROW_STEPS = {
+    chromatic: 8,
+    rows4: 4,   /* major-thirds tuning - shapes repeat every 3 rows */
+    rows5: 5    /* fourths tuning - guitar/Push-style */
+};
+
 function keyboardNote(bankIndex, padIdx) {
     const c = config[bankIndex] ?? {};
     const root = c.kbroot ?? DEFAULTS.BANK.KBROOT;
     const oct = c.kboct ?? 0;
-    const step = c.padlayout === 'rows4' ? Math.floor(padIdx / 8) * 4 + (padIdx % 8)
-                                         : padIdx;
+    const rowStep = KB_ROW_STEPS[c.padlayout] ?? 8;
+    const step = Math.floor(padIdx / 8) * rowStep + (padIdx % 8);
     return clamp(root + oct * 12 + step, 0, 127);
 }
 
 /* Highest semitone offset used by the layout (for octave range clamping) */
 function keyboardSpan(bankIndex) {
-    return config[bankIndex]?.padlayout === 'rows4' ? 3 * 4 + 7 : NUM_PADS - 1;
+    const rowStep = KB_ROW_STEPS[config[bankIndex]?.padlayout] ?? 8;
+    return 3 * rowStep + 7;
 }
 
 /* Send pending note/CC offs for pads still held across a page flip or bank
@@ -1058,8 +1064,8 @@ function getSettingsItems() {
                         banks[selectedBank].padpages = 'off';
                     }
                 },
-                options: ['off', 'chromatic', 'rows4'],
-                format: (v) => ({ 'off': 'Off', 'chromatic': 'Chromatic', 'rows4': 'Rows +4' })[v] ?? v
+                options: ['off', 'chromatic', 'rows4', 'rows5'],
+                format: (v) => ({ 'off': 'Off', 'chromatic': 'Chromatic', 'rows4': 'Rows +4', 'rows5': 'Rows +5' })[v] ?? v
             }),
             createToggle('MIDI In', {
                 get: () => banks[selectedBank].midiin ?? 0,

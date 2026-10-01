@@ -142,7 +142,7 @@ Press a step button:
 | **Pad Mode** | Note/CC | Pads send MIDI notes or CC values |
 | **Knob Pages** | On/Off | Top pad row (25-32) selects between 8 knob pages |
 | **Pad Pages** | Off / Up Toggle / Up Hold / Jog Toggle | Second page of 32 pads; page control style (mutually exclusive with Knob Pages) |
-| **Pad Layout** | Off / Chromatic / Rows +4 | Pads become a chromatic keyboard; Up/Down shift octaves |
+| **Pad Layout** | Off / Chromatic / Rows +4 / Rows +5 | Pads become a keyboard; Up/Down shift octaves |
 | **KB Root** | 0-96 | Keyboard root note (only shown when Pad Layout is on) |
 | **MIDI In** | On/Off | Incoming external CCs update this bank's control state |
 | **Button Offs** | On/On Only/Toggle | Button-off behaviour for all buttons |
@@ -288,7 +288,8 @@ When a page control uses the Up button, that button's own mapping is unavailable
 Set **Pad Layout** in a bank's settings to turn the whole 32-pad grid into a chromatic keyboard. Two layouts:
 
 - **Chromatic**: pads ascend left-to-right, bottom row lowest - 32 consecutive semitones (over 2.5 octaves) from the **KB Root** note (default C2)
-- **Rows +4**: Push-style overlapping rows - each row ascends chromatically but starts only +4 semitones above the row below, so scale shapes repeat every third row and the grid covers ~1.6 octaves
+- **Rows +4**: overlapping rows - each row ascends chromatically but starts only +4 semitones above the row below (major-thirds tuning), so shapes repeat every third row and the grid covers ~1.6 octaves
+- **Rows +5**: guitar/Push-style fourths - each row starts +5 semitones up, so scales and chord shapes finger identically across rows like strings on a guitar
 
 Both layouts:
 
