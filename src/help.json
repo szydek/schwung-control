@@ -97,6 +97,8 @@
         "Knob Pages: On/Off",
         "Pad Pages: Off/Up/",
         " Up-Hold/Jog",
+        "Pad Layout: Off/",
+        " Chromatic",
         "MIDI In: On/Off",
         "Button Offs: On",
         " On-Only/Tog",
@@ -193,6 +195,27 @@
         "Exclusive with",
         "Knob Pages. State",
         "kept per page."
+      ]
+    },
+    {
+      "title": "Keyboard",
+      "lines": [
+        "Pad Layout bank",
+        "setting: Chromatic",
+        "turns all 32 pads",
+        "into a keyboard.",
+        "",
+        "Up/Down: octave",
+        "shift.",
+        "KB Root: base note",
+        "(default C2).",
+        "",
+        "White = C, grey =",
+        "natural, dark =",
+        "sharp/flat.",
+        "",
+        "Exclusive with",
+        "Knob/Pad Pages."
       ]
     },
     {

@@ -18,6 +18,7 @@ Customisable MIDI controller for use on Ableton Move with Schwung installed.
 - Change knobs between relative or absolute values
 - Optional Knob Pages per bank: top pad row (25-32) becomes page selectors for 8 pages of knob mappings
 - Optional Pad Pages per bank: a second page of 32 pads (64 total, Push-style) switched via Up button or jog click
+- Optional Pad Layout per bank: chromatic keyboard across all 32 pads with +/- octave shift
 - Optional MIDI In per bank: incoming external CCs update knob/button/pad state so LEDs and values stay in sync
 - Adjust pad mode per bank and per pad (Note/CC)
 - Adjust pad release behaviour per bank and per pad (Pad Offs, including Toggle)
@@ -141,6 +142,8 @@ Press a step button:
 | **Pad Mode** | Note/CC | Pads send MIDI notes or CC values |
 | **Knob Pages** | On/Off | Top pad row (25-32) selects between 8 knob pages |
 | **Pad Pages** | Off / Up Toggle / Up Hold / Jog Toggle | Second page of 32 pads; page control style (mutually exclusive with Knob Pages) |
+| **Pad Layout** | Off / Chromatic | Pads become a chromatic keyboard; Up/Down shift octaves |
+| **KB Root** | 0-96 | Keyboard root note (only shown when Pad Layout is on) |
 | **MIDI In** | On/Off | Incoming external CCs update this bank's control state |
 | **Button Offs** | On/On Only/Toggle | Button-off behaviour for all buttons |
 | **Output** | external/move/schwung | MIDI output destination |
@@ -280,6 +283,18 @@ Enable **Pad Pages** in a bank's settings to double the pad grid to 64 pads (Pus
 
 When a page control uses the Up button, that button's own mapping is unavailable for the bank. **Pad Pages and Knob Pages are mutually exclusive** - enabling one turns the other off, since Knob Pages owns the top pad row.
 
+### Keyboard Layout
+
+Set **Pad Layout** to **Chromatic** in a bank's settings to turn the whole 32-pad grid into a chromatic keyboard:
+
+- Pads ascend chromatically left-to-right, bottom row lowest - 32 semitones (over 2.5 octaves) starting from the **KB Root** note (default C2)
+- **Up (+) / Down (-)** shift the entire grid by octaves; the range is clamped so no pad can exceed MIDI 0-127
+- LEDs show the keyboard: **C** is lit white as the octave marker, naturals are dim, sharps/flats are dark; toggled-on pads light fully
+- Velocity, Pad Level, toggle pad-offs and per-pad MIDI channel/output still apply; CC-mode pads pass through unchanged
+- Pads held across an octave shift still send the correct note-off
+
+**Pad Layout is mutually exclusive with Knob Pages and Pad Pages** - enabling any one turns the others off. While active, Up/Down are consumed for octave shift and can't be mapped as buttons.
+
 ### MIDI In (External Sync)
 
 Enable **MIDI In** in a bank's settings so incoming external CC messages update the module's internal state:
@@ -364,6 +379,7 @@ Your configuration is stored in:
 - H/light Colour: White
 - Knob Pages: Off
 - Pad Pages: Off
+- Pad Layout: Off
 - MIDI In: Off
 
 ---

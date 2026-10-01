@@ -31,6 +31,7 @@ const NUM_BANKS = 16;
 const NUM_KNOB_PAGES = 8;
 const KNOB_PAGE_PAD_START = NUM_PADS - NUM_KNOB_PAGES;  /* top row: pads 25-32 */
 const NUM_PAD_PAGES = 2;
+const KB_SHARPS = new Set([1, 3, 6, 8, 10]);  /* black-key pitch classes */
 
 /* MIDI CCs */
 const CC_JOG = MoveMainKnob;
@@ -104,6 +105,9 @@ const DEFAULTS = {
         KNOBPAGE: 0,
         PADPAGES: 'off',
         PADPAGE: 0,
+        PADLAYOUT: 'off',
+        KBROOT: 36,
+        KBOCT: 0,
         MIDIIN: 0
     }
 };
@@ -236,6 +240,12 @@ function getBank(index) {
         set padpages(v) { config[index].padpages = v; },
         get padpage() { return config[index].padpage ?? DEFAULTS.BANK.PADPAGE; },
         set padpage(v) { config[index].padpage = v; },
+        get padlayout() { return config[index].padlayout ?? DEFAULTS.BANK.PADLAYOUT; },
+        set padlayout(v) { config[index].padlayout = v; },
+        get kbroot() { return config[index].kbroot ?? DEFAULTS.BANK.KBROOT; },
+        set kbroot(v) { config[index].kbroot = v; },
+        get kboct() { return config[index].kboct ?? DEFAULTS.BANK.KBOCT; },
+        set kboct(v) { config[index].kboct = v; },
         get pads() { return getPads(index, activePadPage(index)); },
         get knobs() { return getKnobs(index, activeKnobPage(index)); },
         buttons: getButtons(index)
@@ -308,6 +318,22 @@ function activePadPage(bankIndex) {
 /* Toggle state is tracked per bank+page+pad */
 function padToggleKey(bankIndex, padIdx, pageIndex = activePadPage(bankIndex)) {
     return `${bankIndex}:${pageIndex}:${padIdx}`;
+}
+
+/* Keyboard layout: active when a layout is set and neither pad paging nor
+ * knob paging owns the grid - all three are mutually exclusive */
+function kbLayoutActive(bankIndex) {
+    const c = config[bankIndex] ?? {};
+    return !!(c.padlayout && c.padlayout !== 'off' && !c.knobpages &&
+              (!c.padpages || c.padpages === 'off'));
+}
+
+/* Chromatic layout: pad i -> root + octave shift + i semitones */
+function keyboardNote(bankIndex, padIdx) {
+    const c = config[bankIndex] ?? {};
+    const root = c.kbroot ?? DEFAULTS.BANK.KBROOT;
+    const oct = c.kboct ?? 0;
+    return clamp(root + oct * 12 + padIdx, 0, 127);
 }
 
 /* Send pending note/CC offs for pads still held across a page flip or bank
@@ -515,7 +541,8 @@ function showPadOverlay(padNum, vel) {
         const cc = banks[selectedBank].pads[padNum].cc;
         valueInfo = `CC: ${cc}`;
     } else {
-        const note = banks[selectedBank].pads[padNum].note;
+        const note = kbLayoutActive(selectedBank) ? keyboardNote(selectedBank, padNum)
+                                                  : banks[selectedBank].pads[padNum].note;
         valueInfo = `Note: ${note}`;
     }
     const displayName = (name !== DEFAULTS.PAD.NAME) ? name : valueInfo;
@@ -630,6 +657,8 @@ function updateLEDs() {
     const bankHl = banks[selectedBank].hlcolour;
     const knobPagesOn = !!banks[selectedBank].knobpages;
     const knobPage = activeKnobPage(selectedBank);
+    const kbOn = kbLayoutActive(selectedBank);
+    const bankPadMode = banks[selectedBank].padmode ?? DEFAULTS.BANK.PAD_MODE;
     for (let i = 0; i < NUM_PADS; i++) {
         if (knobPagesOn && i >= KNOB_PAGE_PAD_START) {
             /* Top row becomes lit knob page selectors */
@@ -638,15 +667,19 @@ function updateLEDs() {
         }
         const pad = pads[i];
         const padOffMode = pad.padoffs ?? bankPadOffMode;
-        let colour = pad.colour ?? Black;
-        if (padOffMode === 'toggle') {
-            const toggleKey = padToggleKey(selectedBank, i);
-            if (toggledNotes.has(toggleKey)) {
-                /* Toggled on: show pad colour */
-                colour = pad.colour ?? Black;
-            } else {
-                /* Toggled off: show highlight colour */
-                colour = resolveHighlightColour(bankHl, pad.colour);
+        const toggleKey = padToggleKey(selectedBank, i);
+        const toggledOn = padOffMode === 'toggle' && toggledNotes.has(toggleKey);
+        let colour;
+        if (kbOn && (pad.padmode ?? bankPadMode) === 'note') {
+            /* Keyboard colouring: C marks octaves, naturals dim, sharps dark */
+            const pc = keyboardNote(selectedBank, i) % 12;
+            colour = pc === 0 ? White : KB_SHARPS.has(pc) ? Black : DarkGrey;
+            if (toggledOn) colour = White;
+        } else {
+            colour = pad.colour ?? Black;
+            if (padOffMode === 'toggle') {
+                colour = toggledOn ? (pad.colour ?? Black)
+                                   : resolveHighlightColour(bankHl, pad.colour);
             }
         }
         enqueueNoteLED(i + 68, colour);
@@ -928,7 +961,7 @@ function getSettingsItems() {
         }
         return buttonItems;
     } else {  // bank config
-        return [
+        const bankItems = [
             createValue('MIDI Channel', {
                 get: () => banks[selectedBank].channel || 1,
                 set: (v) => { banks[selectedBank].channel = v; },
@@ -984,14 +1017,20 @@ function getSettingsItems() {
                 get: () => banks[selectedBank].knobpages ?? 0,
                 set: (v) => {
                     banks[selectedBank].knobpages = v ? 1 : 0;
-                    if (v) banks[selectedBank].padpages = 'off';  /* mutually exclusive */
+                    if (v) {  /* mutually exclusive */
+                        banks[selectedBank].padpages = 'off';
+                        banks[selectedBank].padlayout = 'off';
+                    }
                 }
             }),
             createEnum('Pad Pages', {
                 get: () => banks[selectedBank].padpages ?? 'off',
                 set: (v) => {
                     banks[selectedBank].padpages = v;
-                    if (v !== 'off') banks[selectedBank].knobpages = 0;  /* mutually exclusive */
+                    if (v !== 'off') {  /* mutually exclusive */
+                        banks[selectedBank].knobpages = 0;
+                        banks[selectedBank].padlayout = 'off';
+                    }
                 },
                 options: ['off', 'up-toggle', 'up-hold', 'jog-toggle'],
                 format: (v) => ({
@@ -1000,6 +1039,18 @@ function getSettingsItems() {
                     'up-hold': 'Up Hold',
                     'jog-toggle': 'Jog Toggle'
                 })[v] ?? v
+            }),
+            createEnum('Pad Layout', {
+                get: () => banks[selectedBank].padlayout ?? 'off',
+                set: (v) => {
+                    banks[selectedBank].padlayout = v;
+                    if (v !== 'off') {  /* mutually exclusive */
+                        banks[selectedBank].knobpages = 0;
+                        banks[selectedBank].padpages = 'off';
+                    }
+                },
+                options: ['off', 'chromatic'],
+                format: (v) => v === 'chromatic' ? 'Chromatic' : 'Off'
             }),
             createToggle('MIDI In', {
                 get: () => banks[selectedBank].midiin ?? 0,
@@ -1036,6 +1087,18 @@ function getSettingsItems() {
                 format: (v) => HL_COLOUR_LABELS[v] ?? 'White'
             })
         ];
+        /* Root note only makes sense once a keyboard layout is enabled */
+        if (banks[selectedBank].padlayout !== 'off') {
+            bankItems.push(createValue('KB Root', {
+                get: () => banks[selectedBank].kbroot ?? DEFAULTS.BANK.KBROOT,
+                set: (v) => { banks[selectedBank].kbroot = v; },
+                min: 0,
+                max: 96,
+                step: 1,
+                format: (v) => `${midiNotes[v]} (${v})`
+            }));
+        }
+        return bankItems;
     }
 }
 
@@ -1202,6 +1265,29 @@ function handleCC(cc, val) {
             transferPulse(3, selectedBank);
         }
         needsRedraw = true;
+        return;
+    }
+
+    /* Keyboard octave shift: +/- (Up/Down) move the whole grid by octaves */
+    if (kbLayoutActive(selectedBank) && (cc === MoveUp || cc === MoveDown)) {
+        if (val > 63) {
+            if (viewMode === VIEW_SETTINGS) settingsMenuState.editing = false;
+            const c = config[selectedBank] ?? {};
+            const root = c.kbroot ?? DEFAULTS.BANK.KBROOT;
+            const oct = c.kboct ?? 0;
+            /* Clamp so the whole 32-pad grid stays inside 0-127 */
+            const next = clamp(oct + (cc === MoveUp ? 1 : -1),
+                Math.ceil(-root / 12), Math.floor((127 - NUM_PADS + 1 - root) / 12));
+            if (next !== oct) {
+                flushHeldPads();
+                banks[selectedBank].kboct = next;
+                updateLEDs();
+            }
+            if (viewMode === VIEW_MAIN && banks[selectedBank].overlay) {
+                showOverlay('Root', midiNotes[keyboardNote(selectedBank, 0)], OVERLAY_DURATION);
+            }
+            needsRedraw = true;
+        }
         return;
     }
 
@@ -1463,8 +1549,8 @@ function handleCC(cc, val) {
             restoreToggleStateForBank(selectedBank);
         }
 
-        /* Full LED refresh when Pad Offs, H/light Colour, Button Offs, Knob Pages or Pad Pages changes */
-        if (itemChanged && (item.label === 'Pad Offs' || item.label === 'H/light Colour' || item.label === 'Button Offs' || item.label === 'Knob Pages' || item.label === 'Pad Pages')) {
+        /* Full LED refresh when Pad Offs, H/light Colour, Button Offs or a paging/layout option changes */
+        if (itemChanged && (item.label === 'Pad Offs' || item.label === 'H/light Colour' || item.label === 'Button Offs' || item.label === 'Knob Pages' || item.label === 'Pad Pages' || item.label === 'Pad Layout' || item.label === 'KB Root')) {
             updateLEDs();
         }
 
@@ -1575,7 +1661,9 @@ function handleNote(note, vel) {
         const padMode = getPadMode(pad);
         const padOutput = getPadOutput(pad);
         let channel = getChannel(pad);
-        let noteOut = pad.note;
+        let noteOut = kbLayoutActive(selectedBank) && padMode === 'note'
+            ? keyboardNote(selectedBank, padIdx)
+            : pad.note;
         let ccOut = pad.cc;
         const highlightColour = resolveHighlightColour(banks[selectedBank].hlcolour, pad.colour);
         const padOffMode = getPadOffs(pad);
@@ -1654,7 +1742,7 @@ function handleNote(note, vel) {
         }
 
         if (viewMode === VIEW_MAIN && highlightColour != 0) {
-            if (padOffMode === 'toggle') {
+            if (padOffMode === 'toggle' && !kbLayoutActive(selectedBank)) {
                 /* In toggle mode the LED state is inverted: */
                 /* highlight = active/toggled-on, pad colour = off/pressed-moment */
                 enqueueNoteLED(note, pad.colour);
@@ -1674,7 +1762,7 @@ function handleNote(note, vel) {
 
         /* A page/bank flip while held already sent this pad's off - swallow */
         if (swallowedPadReleases.delete(padIdx)) {
-            enqueueNoteLED(note, banks[selectedBank].pads[padIdx].colour);
+            updateLEDs();
             needsRedraw = true;
             return;
         }
@@ -1704,7 +1792,12 @@ function handleNote(note, vel) {
         }
 
         const releaseHighlightColour = resolveHighlightColour(banks[selectedBank].hlcolour, releasePad.colour);
-        if (viewMode === VIEW_MAIN && releaseHighlightColour != 0) {
+        if (kbLayoutActive(selectedBank) && releasePadMode === 'note' && viewMode === VIEW_MAIN) {
+            /* Restore keyboard colouring, brightened while a toggle is on */
+            const pc = keyboardNote(selectedBank, padIdx) % 12;
+            enqueueNoteLED(note, toggledNotes.has(releaseToggleKey) ? White
+                : pc === 0 ? White : KB_SHARPS.has(pc) ? Black : DarkGrey);
+        } else if (viewMode === VIEW_MAIN && releaseHighlightColour != 0) {
             if (releasePadOffMode === 'toggle' && toggledNotes.has(releaseToggleKey)) {
                 /* Toggle is on: show pad colour */
                 enqueueNoteLED(note, releasePad.colour);
