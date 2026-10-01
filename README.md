@@ -17,6 +17,7 @@ Customisable MIDI controller for use on Ableton Move with Schwung installed.
 - Assign a name to banks, pads, knobs and buttons
 - Change knobs between relative or absolute values
 - Optional Knob Pages per bank: top pad row (25-32) becomes page selectors for 8 pages of knob mappings
+- Optional MIDI In per bank: incoming external CCs update knob/button/pad state so LEDs and values stay in sync
 - Adjust pad mode per bank and per pad (Note/CC)
 - Adjust pad release behaviour per bank and per pad (Pad Offs, including Toggle)
 - Adjust button release behaviour per bank and per button (Button Offs, including Toggle)
@@ -138,6 +139,7 @@ Press a step button:
 | **Pad Offs** | On/On Only/Toggle | Pad-off behaviour for all pads |
 | **Pad Mode** | Note/CC | Pads send MIDI notes or CC values |
 | **Knob Pages** | On/Off | Top pad row (25-32) selects between 8 knob pages |
+| **MIDI In** | On/Off | Incoming external CCs update this bank's control state |
 | **Button Offs** | On/On Only/Toggle | Button-off behaviour for all buttons |
 | **Output** | external/move/schwung | MIDI output destination |
 | **Show Overlay** | On/Off | Display info when pressing pads/knobs |
@@ -258,7 +260,17 @@ Enable **Knob Pages** in a bank's settings to turn the top pad row (pads 25-32) 
 
 When Knob Pages is off (default), pads 25-32 behave as normal pads. Existing pad configurations are preserved when you toggle the feature, so you can switch it on and off without losing mappings.
 
-### Colour Schemes
+### MIDI In (External Sync)
+
+Enable **MIDI In** in a bank's settings so incoming external CC messages update the module's internal state:
+
+- **Knobs**: matching CC + channel updates the stored value and LED ring - touching the knob afterwards picks up from the synced position instead of jumping
+- **Toggle buttons and CC-mode pads**: incoming values sync the on/off state and LED
+- Matching is done across **all banks** (and all configured knob pages), so state is current whichever bank you switch to
+- Matching uses each control's CC and effective MIDI channel (per-control override, falling back to the bank channel), exactly as used for output
+- Received values are never re-transmitted - state only - so devices that echo CCs can't create a feedback loop
+
+**Note:** Knob pages 2-8 only respond to MIDI In once they have been configured (to avoid default CCs matching on untouched pages).
 
 **Pads & Buttons:** 0-127 individual colours
 
@@ -331,6 +343,7 @@ Your configuration is stored in:
 - Show Overlay: On
 - H/light Colour: White
 - Knob Pages: Off
+- MIDI In: Off
 
 ---
 

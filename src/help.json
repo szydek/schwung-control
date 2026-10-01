@@ -95,6 +95,7 @@
         "Pad Offs: On/Off/Tog",
         "Pad Mode: Note/CC",
         "Knob Pages: On/Off",
+        "MIDI In: On/Off",
         "Button Offs: On",
         " On-Only/Tog",
         "Output: ext/move/sch",
@@ -172,6 +173,23 @@
         "",
         "Pad 25-32 config",
         "is preserved."
+      ]
+    },
+    {
+      "title": "MIDI In",
+      "lines": [
+        "Bank setting.",
+        "Incoming external",
+        "CCs update control",
+        "state + LEDs.",
+        "",
+        "Matches CC + ch",
+        "across all banks",
+        "and knob pages.",
+        "",
+        "Knobs pick up from",
+        "synced values.",
+        "Nothing is re-sent."
       ]
     },
     {

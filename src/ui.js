@@ -100,7 +100,8 @@ const DEFAULTS = {
         NAME: "(empty)",
         HIGHLIGHTCOLOUR: 122,
         KNOBPAGES: 0,
-        KNOBPAGE: 0
+        KNOBPAGE: 0,
+        MIDIIN: 0
     }
 };
 
@@ -169,6 +170,12 @@ let cable = 2;
 const LED_MSGS_PER_TICK = 8;
 const ledQueue = [];
 
+/* Debug: log every external MIDI message to the console while the MIDI In
+ * feature is being verified on device. Set false once confirmed working. */
+const DEBUG_MIDI_IN = true;
+let midiInReceived = 0;
+let midiInMatched = 0;
+
 /* UI state */
 let shiftHeld = false;
 let needsRedraw = true;
@@ -220,6 +227,8 @@ function getBank(index) {
         set knobpages(v) { config[index].knobpages = v; },
         get knobpage() { return config[index].knobpage ?? DEFAULTS.BANK.KNOBPAGE; },
         set knobpage(v) { config[index].knobpage = v; },
+        get midiin() { return config[index].midiin ?? DEFAULTS.BANK.MIDIIN; },
+        set midiin(v) { config[index].midiin = v; },
         pads: getPads(index),
         get knobs() { return getKnobs(index, activeKnobPage(index)); },
         buttons: getButtons(index)
@@ -911,6 +920,10 @@ function getSettingsItems() {
             createToggle('Knob Pages', {
                 get: () => banks[selectedBank].knobpages ?? 0,
                 set: (v) => { banks[selectedBank].knobpages = v ? 1 : 0; }
+            }),
+            createToggle('MIDI In', {
+                get: () => banks[selectedBank].midiin ?? 0,
+                set: (v) => { banks[selectedBank].midiin = v ? 1 : 0; }
             }),
             createEnum('Button Offs', {
                 get: () => banks[selectedBank].buttonoffs ?? 'button-on-only',
@@ -1604,8 +1617,104 @@ function onMidiMessage(msg) {
     }
 }
 
-function midiIgnore(msg) {
-    /* ignore external MIDI messages */
+/* Match an incoming external CC against mapped controls in banks that have
+ * MIDI In enabled. Updates stored values (and toggle state) so LEDs and
+ * outgoing values stay in sync without re-transmitting anything. */
+function handleExternalCC(channel, ccNum, value) {
+    let matched = false;
+    for (let b = 0; b < NUM_BANKS; b++) {
+        const bank = banks[b];
+        if (!bank || !bank.midiin) continue;
+
+        /* Knobs - check every configured page so state stays in sync when
+         * switching. Unconfigured pages (2-8) are skipped: their knobs only
+         * carry default CCs, which would create phantom matches and empty
+         * pageknobs entries in the config. */
+        const pages = bank.knobpages ? NUM_KNOB_PAGES : 1;
+        for (let p = 0; p < pages; p++) {
+            if (p > 0 && !config[b]?.pageknobs?.[p]) continue;
+            const knobs = getKnobs(b, p);
+            /* Paged views share the master knob; only match it on page 0 */
+            const count = p === 0 ? NUM_KNOBS : NUM_KNOBS - 1;
+            for (let i = 0; i < count; i++) {
+                const knob = knobs[i];
+                const ch = (knob.channel ?? bank.channel ?? DEFAULTS.BANK.CHANNEL) - 1;
+                if (ch !== channel || knob.cc !== ccNum) continue;
+                knob.value = value;
+                matched = true;
+                if (b === selectedBank && p === activeKnobPage(b)) {
+                    const colour = getColourForKnobValue(knob.colour, value, knob.min, knob.max);
+                    const cacheKey = `${b}:${p}:${i}`;
+                    if (cachedKnobColour[cacheKey] !== colour) {
+                        enqueueCcLED(i + 71, colour);
+                        cachedKnobColour[cacheKey] = colour;
+                    }
+                }
+            }
+        }
+
+        /* Buttons */
+        const bankButtonOffs = bank.buttonoffs ?? DEFAULTS.BANK.BUTTON_OFFS;
+        for (let i = 0; i < ALL_BUTTONS.length; i++) {
+            const button = bank.buttons[i];
+            const ch = (button.channel ?? bank.channel ?? DEFAULTS.BANK.CHANNEL) - 1;
+            if (ch !== channel || button.cc !== ccNum) continue;
+            matched = true;
+            const buttonOffs = button.buttonoffs ?? bankButtonOffs;
+            if (buttonOffs === 'toggle') {
+                const key = `${b}:b${i}`;
+                if (value > 63) { toggledButtons.add(key); button.value = 127; }
+                else { toggledButtons.delete(key); button.value = 0; }
+                if (b === selectedBank) {
+                    enqueueCcLED(ALL_BUTTONS[i], value > 63 ? getButtonRestingColour(button, i) : Black);
+                }
+            } else {
+                button.value = value;
+            }
+        }
+
+        /* CC-mode pads (top row excluded when it serves as page selectors) */
+        const bankPadMode = bank.padmode ?? DEFAULTS.BANK.PAD_MODE;
+        const bankPadOffMode = bank.padoffs ?? DEFAULTS.BANK.PAD_OFFS;
+        const padLimit = bank.knobpages ? KNOB_PAGE_PAD_START : NUM_PADS;
+        for (let i = 0; i < padLimit; i++) {
+            const pad = bank.pads[i];
+            const padMode = pad.padmode ?? bankPadMode;
+            if (padMode !== 'cc' || pad.cc !== ccNum) continue;
+            const ch = (pad.channel ?? bank.channel ?? DEFAULTS.BANK.CHANNEL) - 1;
+            if (ch !== channel) continue;
+            matched = true;
+            const padOffMode = pad.padoffs ?? bankPadOffMode;
+            if (padOffMode === 'toggle') {
+                const key = `${b}:${i}`;
+                if (value > 63) { toggledNotes.add(key); pad.value = 127; }
+                else { toggledNotes.delete(key); pad.value = 0; }
+                if (b === selectedBank) {
+                    enqueueNoteLED(i + 68, value > 63 ? pad.colour : resolveHighlightColour(bank.hlcolour, pad.colour));
+                }
+            } else {
+                pad.value = value;
+            }
+        }
+    }
+    midiInReceived++;
+    if (matched) midiInMatched++;
+    if (DEBUG_MIDI_IN && !matched) console.log(`MIDI in: no match ch=${channel + 1} cc=${ccNum} val=${value} (matched ${midiInMatched}/${midiInReceived})`);
+}
+
+function onExternalMidiMessage(msg) {
+    if (!msg || msg.length < 3) return;
+
+    /* External messages may arrive either as [status, d1, d2] or with a
+     * cable/type prefix byte: [cable<<4|type, status, d1, d2]. Log the raw
+     * form while debugging so the actual format is visible on device. */
+    if (DEBUG_MIDI_IN) console.log(`ext midi (${msg.length}b): ${JSON.stringify(msg)}`);
+
+    const off = msg.length >= 4 ? 1 : 0;
+    const status = msg[off];
+    if ((status & 0xF0) === 0xB0) {
+        handleExternalCC(status & 0x0F, msg[off + 1], msg[off + 2]);
+    }
 }
 
     /* ============================================================================
@@ -1666,4 +1775,4 @@ function tick() {
 globalThis.init = init;
 globalThis.tick = tick;
 globalThis.onMidiMessageInternal = onMidiMessage;
-globalThis.onMidiMessageExternal = midiIgnore;
+globalThis.onMidiMessageExternal = onExternalMidiMessage;
