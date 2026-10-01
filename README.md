@@ -295,6 +295,7 @@ Both layouts:
 
 - **Up (+) / Down (-)** shift the entire grid by octaves; the range is clamped so no pad can exceed MIDI 0-127
 - LEDs show the keyboard: **C** is lit white as the octave marker, naturals are dim, sharps/flats are dark; toggled-on pads light fully
+- Pressing a pad lights **every pad that plays the same note** - on overlapping layouts (+4/+5) duplicates across rows flash together, making the intervals between positions visible
 - Velocity, Pad Level, toggle pad-offs and per-pad MIDI channel/output still apply; CC-mode pads pass through unchanged
 - Pads held across an octave shift still send the correct note-off
 

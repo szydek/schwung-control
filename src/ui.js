@@ -1757,7 +1757,16 @@ function handleNote(note, vel) {
         }
 
         if (viewMode === VIEW_MAIN && highlightColour != 0) {
-            if (padOffMode === 'toggle' && !kbLayoutActive(selectedBank)) {
+            if (kbLayoutActive(selectedBank) && padMode === 'note') {
+                /* Light every note-mode pad mapping to this pitch -
+                 * overlapping layouts place the same note on several pads */
+                const allPads = banks[selectedBank].pads;
+                for (let j = 0; j < NUM_PADS; j++) {
+                    if (getPadMode(allPads[j]) === 'note' && keyboardNote(selectedBank, j) === noteOut) {
+                        enqueueNoteLED(j + 68, highlightColour);
+                    }
+                }
+            } else if (padOffMode === 'toggle') {
                 /* In toggle mode the LED state is inverted: */
                 /* highlight = active/toggled-on, pad colour = off/pressed-moment */
                 enqueueNoteLED(note, pad.colour);
@@ -1808,10 +1817,18 @@ function handleNote(note, vel) {
 
         const releaseHighlightColour = resolveHighlightColour(banks[selectedBank].hlcolour, releasePad.colour);
         if (kbLayoutActive(selectedBank) && releasePadMode === 'note' && viewMode === VIEW_MAIN) {
-            /* Restore keyboard colouring, brightened while a toggle is on */
-            const pc = keyboardNote(selectedBank, padIdx) % 12;
-            enqueueNoteLED(note, toggledNotes.has(releaseToggleKey) ? White
-                : pc === 0 ? White : KB_SHARPS.has(pc) ? Black : DarkGrey);
+            /* Restore keyboard colouring on every pad showing this pitch,
+             * brightened while a toggle is on */
+            const relNote = keyboardNote(selectedBank, padIdx);
+            const pc = relNote % 12;
+            const kbColour = toggledNotes.has(releaseToggleKey) ? White
+                : pc === 0 ? White : KB_SHARPS.has(pc) ? Black : DarkGrey;
+            const allPads = banks[selectedBank].pads;
+            for (let j = 0; j < NUM_PADS; j++) {
+                if (getPadMode(allPads[j]) === 'note' && keyboardNote(selectedBank, j) === relNote) {
+                    enqueueNoteLED(j + 68, kbColour);
+                }
+            }
         } else if (viewMode === VIEW_MAIN && releaseHighlightColour != 0) {
             if (releasePadOffMode === 'toggle' && toggledNotes.has(releaseToggleKey)) {
                 /* Toggle is on: show pad colour */
