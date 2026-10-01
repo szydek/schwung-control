@@ -328,12 +328,21 @@ function kbLayoutActive(bankIndex) {
               (!c.padpages || c.padpages === 'off'));
 }
 
-/* Chromatic layout: pad i -> root + octave shift + i semitones */
+/* Keyboard layouts:
+ *   chromatic: pad i -> root + oct*12 + i          (8 semitones per row)
+ *   rows4:     pad i -> root + oct*12 + row*4 + col (Push-style, rows overlap) */
 function keyboardNote(bankIndex, padIdx) {
     const c = config[bankIndex] ?? {};
     const root = c.kbroot ?? DEFAULTS.BANK.KBROOT;
     const oct = c.kboct ?? 0;
-    return clamp(root + oct * 12 + padIdx, 0, 127);
+    const step = c.padlayout === 'rows4' ? Math.floor(padIdx / 8) * 4 + (padIdx % 8)
+                                         : padIdx;
+    return clamp(root + oct * 12 + step, 0, 127);
+}
+
+/* Highest semitone offset used by the layout (for octave range clamping) */
+function keyboardSpan(bankIndex) {
+    return config[bankIndex]?.padlayout === 'rows4' ? 3 * 4 + 7 : NUM_PADS - 1;
 }
 
 /* Send pending note/CC offs for pads still held across a page flip or bank
@@ -1049,8 +1058,8 @@ function getSettingsItems() {
                         banks[selectedBank].padpages = 'off';
                     }
                 },
-                options: ['off', 'chromatic'],
-                format: (v) => v === 'chromatic' ? 'Chromatic' : 'Off'
+                options: ['off', 'chromatic', 'rows4'],
+                format: (v) => ({ 'off': 'Off', 'chromatic': 'Chromatic', 'rows4': 'Rows +4' })[v] ?? v
             }),
             createToggle('MIDI In', {
                 get: () => banks[selectedBank].midiin ?? 0,
@@ -1275,9 +1284,9 @@ function handleCC(cc, val) {
             const c = config[selectedBank] ?? {};
             const root = c.kbroot ?? DEFAULTS.BANK.KBROOT;
             const oct = c.kboct ?? 0;
-            /* Clamp so the whole 32-pad grid stays inside 0-127 */
+            /* Clamp so the whole grid stays inside 0-127 for the layout */
             const next = clamp(oct + (cc === MoveUp ? 1 : -1),
-                Math.ceil(-root / 12), Math.floor((127 - NUM_PADS + 1 - root) / 12));
+                Math.ceil(-root / 12), Math.floor((127 - keyboardSpan(selectedBank) - root) / 12));
             if (next !== oct) {
                 flushHeldPads();
                 banks[selectedBank].kboct = next;
