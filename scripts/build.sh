@@ -11,22 +11,22 @@ cd "$REPO_ROOT"
 echo "=== Building Control Module ==="
 
 # Create dist directory
-mkdir -p dist/controldev
+mkdir -p dist/control
 
 # Copy files
 echo "Packaging..."
-cp src/module.json dist/controldev/
-cp src/ui.js dist/controldev/
+cp src/module.json dist/control/
+cp src/ui.js dist/control/
 
 # Create tarball for release
 cd dist
-tar -czvf controldev-module.tar.gz controldev/
+tar -czvf control-module.tar.gz control/
 cd ..
 
 echo ""
 echo "=== Build Complete ==="
-echo "Output: dist/controldev/"
-echo "Tarball: dist/controldev-module.tar.gz"
+echo "Output: dist/control/"
+echo "Tarball: dist/control-module.tar.gz"
 echo ""
 echo "To install on Move:"
 echo "  ./scripts/install.sh"

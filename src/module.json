@@ -1,7 +1,7 @@
 {
-  "id": "controldev",
-  "name": "Custom MIDI Dev",
-  "version": "0.6.2-dev",
+  "id": "control",
+  "name": "Custom MIDI Control",
+  "version": "0.6.2",
   "description": "Custom MIDI controller with 16 banks of configurable pads/knobs/buttons",
   "author": "chaolue",
   "ui": "ui.js",
