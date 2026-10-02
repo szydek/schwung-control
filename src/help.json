@@ -102,6 +102,7 @@
         "Pad Layout: Off/",
         " Chrom/+4/+5",
         "MIDI In: On/Off",
+        "Scenes: On/Off",
         "Button Offs: On",
         " On-Only/Tog",
         "Output: ext/move/sch",
@@ -195,7 +196,9 @@
         "jog wheel",
         "",
         "Exclusive with",
-        "Knob Pages. State",
+        "Knob Pages +",
+        "Layout (within a",
+        "scene). State",
         "kept per page."
       ]
     },
@@ -241,6 +244,27 @@
         "Knobs pick up from",
         "synced values.",
         "Nothing is re-sent."
+      ]
+    },
+    {
+      "title": "Scenes",
+      "lines": [
+        "Bank setting.",
+        "Row1-4 buttons",
+        "switch between 4",
+        "sub-banks - each",
+        "has the full bank",
+        "option set (pads,",
+        "knobs, pages,",
+        "layout, MIDI In).",
+        "",
+        "Active scene stays",
+        "lit; overlay shows",
+        "Bank / Scene.",
+        "Rename via Name.",
+        "",
+        "Row1-4 are not",
+        "mappable while on."
       ]
     },
     {
